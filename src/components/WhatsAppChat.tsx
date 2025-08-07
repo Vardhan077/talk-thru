@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Send, MoreVertical, Phone, Video } from "lucide-react";
+import { Search, Send, MoreVertical, Phone, Video, Settings, ArrowLeft, Moon, Sun } from "lucide-react";
+import SettingsPanel from './SettingsPanel';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Message {
   id: string;
@@ -78,10 +80,13 @@ const sampleMessages: Message[] = [
 ];
 
 export default function WhatsAppChat() {
-  const [selectedContact, setSelectedContact] = useState<Contact>(sampleContacts[0]);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [messages, setMessages] = useState<Message[]>(sampleMessages);
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showMobileChat, setShowMobileChat] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const { isDarkMode, toggleTheme } = useTheme();
 
   const sendMessage = () => {
     if (!newMessage.trim()) return;
@@ -106,23 +111,51 @@ export default function WhatsAppChat() {
     contact.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleContactSelect = (contact: Contact) => {
+    setSelectedContact(contact);
+    setShowMobileChat(true);
+  };
+
+  const handleBackToContacts = () => {
+    setShowMobileChat(false);
+    setSelectedContact(null);
+  };
+
   return (
     <div className="flex h-screen bg-chat-background">
       {/* Sidebar */}
-      <div className="w-[400px] bg-chat-sidebar-background border-r border-chat-sidebar-border flex flex-col">
+      <div className={`w-full md:w-[400px] bg-chat-sidebar-background border-r border-chat-sidebar-border flex flex-col ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
         {/* Sidebar Header */}
-        <div className="p-4 bg-whatsapp-green-light border-b border-chat-sidebar-border">
+        <div className="p-4 bg-whatsapp-green border-b border-chat-sidebar-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Avatar className="h-10 w-10">
                 <AvatarImage src="/placeholder.svg" />
-                <AvatarFallback>Me</AvatarFallback>
+                <AvatarFallback className="bg-white text-whatsapp-green">Me</AvatarFallback>
               </Avatar>
-              <span className="font-medium text-foreground">My Profile</span>
+              <span className="font-medium text-white hidden md:block">WhatsApp</span>
             </div>
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
-              <MoreVertical className="h-5 w-5" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="text-white hover:bg-whatsapp-green-dark hidden md:flex"
+                onClick={toggleTheme}
+              >
+                {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="text-white hover:bg-whatsapp-green-dark md:hidden"
+                onClick={() => setShowSettings(true)}
+              >
+                <Settings className="h-5 w-5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-whatsapp-green-dark hidden md:flex">
+                <MoreVertical className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -144,9 +177,9 @@ export default function WhatsAppChat() {
           {filteredContacts.map((contact) => (
             <div
               key={contact.id}
-              onClick={() => setSelectedContact(contact)}
-              className={`p-3 cursor-pointer hover:bg-accent transition-colors border-b border-chat-sidebar-border ${
-                selectedContact.id === contact.id ? 'bg-accent' : ''
+              onClick={() => handleContactSelect(contact)}
+              className={`p-3 cursor-pointer hover:bg-accent transition-colors border-b border-chat-sidebar-border last:border-b-0 ${
+                selectedContact?.id === contact.id ? 'bg-accent' : ''
               }`}
             >
               <div className="flex items-center gap-3">
@@ -180,10 +213,32 @@ export default function WhatsAppChat() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col ${!showMobileChat && !selectedContact ? 'hidden md:flex' : 'flex'}`}>
+        {!selectedContact ? (
+          <div className="flex-1 flex items-center justify-center bg-chat-background">
+            <div className="text-center text-muted-foreground">
+              <div className="mb-4">
+                <div className="w-24 h-24 bg-muted rounded-full mx-auto flex items-center justify-center">
+                  <Send className="h-12 w-12" />
+                </div>
+              </div>
+              <h3 className="text-lg font-medium mb-2">WhatsApp Web</h3>
+              <p className="text-sm">Send and receive messages without keeping your phone online.</p>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Chat Header */}
         <div className="p-4 bg-whatsapp-green-light border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="md:hidden text-muted-foreground"
+              onClick={handleBackToContacts}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <Avatar className="h-10 w-10">
               <AvatarImage src={selectedContact.avatar} />
               <AvatarFallback>{selectedContact.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
@@ -196,10 +251,10 @@ export default function WhatsAppChat() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
+            <Button variant="ghost" size="icon" className="text-muted-foreground hidden md:flex">
               <Video className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
+            <Button variant="ghost" size="icon" className="text-muted-foreground hidden md:flex">
               <Phone className="h-5 w-5" />
             </Button>
             <Button variant="ghost" size="icon" className="text-muted-foreground">
@@ -209,53 +264,60 @@ export default function WhatsAppChat() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-chat-background">
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-chat-background">
           {messages.map((message) => (
             <div
               key={message.id}
               className={`flex ${message.sender === 'me' ? 'justify-end' : 'justify-start'}`}
             >
-              <Card className={`max-w-[70%] p-3 ${
+              <div className={`max-w-[85%] md:max-w-[70%] p-3 rounded-lg shadow-sm ${
                 message.sender === 'me' 
-                  ? 'bg-whatsapp-green text-white' 
-                  : 'bg-white text-foreground'
+                  ? 'bg-whatsapp-green text-white rounded-br-none' 
+                  : 'bg-card text-foreground rounded-bl-none border'
               }`}>
-                <p className="text-sm">{message.text}</p>
+                <p className="text-sm leading-relaxed">{message.text}</p>
                 <div className={`flex items-center justify-end gap-1 mt-1 text-xs ${
                   message.sender === 'me' ? 'text-white/70' : 'text-muted-foreground'
                 }`}>
                   <span>{message.timestamp}</span>
                   {message.sender === 'me' && (
-                    <span className="text-xs">
+                    <span className={`text-xs ml-1 ${
+                      message.status === 'read' ? 'text-blue-400' : ''
+                    }`}>
                       {message.status === 'read' ? '✓✓' : message.status === 'delivered' ? '✓✓' : '✓'}
                     </span>
                   )}
                 </div>
-              </Card>
+              </div>
             </div>
           ))}
         </div>
 
         {/* Message Input */}
-        <div className="p-4 bg-white border-t border-border">
+        <div className="p-4 bg-card border-t border-border">
           <div className="flex items-center gap-3">
             <Input
               placeholder="Type a message"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-              className="flex-1"
+              className="flex-1 border-0 bg-background focus-visible:ring-1"
             />
             <Button 
               onClick={sendMessage}
-              className="bg-whatsapp-green hover:bg-whatsapp-green-dark text-white"
+              size="icon"
+              className="bg-whatsapp-green hover:bg-whatsapp-green-dark text-white rounded-full"
               disabled={!newMessage.trim()}
             >
               <Send className="h-4 w-4" />
             </Button>
           </div>
         </div>
+        </>
+        )}
       </div>
+      
+      <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }
