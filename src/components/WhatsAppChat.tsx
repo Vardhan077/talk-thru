@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Send, MoreVertical, Phone, Video, Settings, ArrowLeft, Moon, Sun } from "lucide-react";
+import { Search, Send, MoreVertical, Phone, Video, Settings, ArrowLeft, Moon, Sun, User, LogOut } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import SettingsPanel from './SettingsPanel';
 import ProfilePopup from './ProfilePopup';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -216,14 +217,33 @@ export default function WhatsAppChat() {
               >
                 <Settings className="h-5 w-5" />
               </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="text-white hover:bg-whatsapp-green-dark hidden md:flex"
-                onClick={handleLogout}
-              >
-                <MoreVertical className="h-5 w-5" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-white hover:bg-whatsapp-green-dark hidden md:flex"
+                  >
+                    <MoreVertical className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem 
+                    onClick={() => currentUser && setProfileUser(currentUser)}
+                    className="flex items-center gap-2"
+                  >
+                    <User className="h-4 w-4" />
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={handleLogout}
+                    className="flex items-center gap-2"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
@@ -339,9 +359,22 @@ export default function WhatsAppChat() {
             <Button variant="ghost" size="icon" className="text-muted-foreground hidden md:flex">
               <Phone className="h-5 w-5" />
             </Button>
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
-              <MoreVertical className="h-5 w-5" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground">
+                  <MoreVertical className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem 
+                  onClick={() => selectedUser && setProfileUser(selectedUser)}
+                  className="flex items-center gap-2"
+                >
+                  <User className="h-4 w-4" />
+                  Profile
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
