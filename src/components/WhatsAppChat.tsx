@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,120 +6,174 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Search, Send, MoreVertical, Phone, Video, Settings, ArrowLeft, Moon, Sun } from "lucide-react";
 import SettingsPanel from './SettingsPanel';
+import ProfilePopup from './ProfilePopup';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
+import axios from 'axios';
 
 interface Message {
-  id: string;
-  text: string;
-  sender: 'me' | 'them';
-  timestamp: string;
+  id?: string;
+  message: string;
+  sender: string;
+  timestamp: number;
   status?: 'sent' | 'delivered' | 'read';
 }
 
-interface Contact {
-  id: string;
-  name: string;
-  avatar: string;
-  lastMessage: string;
-  timestamp: string;
-  unreadCount?: number;
-  isOnline?: boolean;
+interface User {
+  _id: string;
+  username: string;
+  photoURL?: string;
+  hasUnseen?: boolean;
 }
 
-const sampleContacts: Contact[] = [
-  {
-    id: '1',
-    name: 'Sarah Wilson',
-    avatar: '/placeholder.svg',
-    lastMessage: 'Hey! How are you doing?',
-    timestamp: '12:30',
-    unreadCount: 3,
-    isOnline: true
-  },
-  {
-    id: '2',
-    name: 'John Smith',
-    avatar: '/placeholder.svg',
-    lastMessage: 'Thanks for the update',
-    timestamp: '11:45',
-    isOnline: false
-  },
-  {
-    id: '3',
-    name: 'Design Team',
-    avatar: '/placeholder.svg',
-    lastMessage: 'New designs are ready for review',
-    timestamp: 'Yesterday',
-    unreadCount: 1,
-    isOnline: true
-  }
-];
-
-const sampleMessages: Message[] = [
-  {
-    id: '1',
-    text: 'Hey! How are you doing?',
-    sender: 'them',
-    timestamp: '12:28',
-    status: 'read'
-  },
-  {
-    id: '2',
-    text: 'I\'m doing great! Just finished working on the new project.',
-    sender: 'me',
-    timestamp: '12:29',
-    status: 'read'
-  },
-  {
-    id: '3',
-    text: 'That sounds awesome! Can\'t wait to see it.',
-    sender: 'them',
-    timestamp: '12:30',
-    status: 'delivered'
-  }
-];
+const API = 'http://localhost:5000/api';
 
 export default function WhatsAppChat() {
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
-  const [messages, setMessages] = useState<Message[]>(sampleMessages);
+  const { currentUser, allUsers, setCurrentUser, setAllUsers } = useAuth();
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [profileUser, setProfileUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { isDarkMode, toggleTheme } = useTheme();
 
-  const sendMessage = () => {
-    if (!newMessage.trim()) return;
-    
-    const message: Message = {
-      id: Date.now().toString(),
-      text: newMessage,
-      sender: 'me',
-      timestamp: new Date().toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false 
-      }),
-      status: 'sent'
-    };
-    
-    setMessages([...messages, message]);
-    setNewMessage('');
+  const fetchMessages = async () => {
+    if (!selectedUser || !currentUser) return;
+    try {
+      const res = await axios.get(
+        `${API}/messages/${currentUser.username}/${selectedUser.username}`,
+        { withCredentials: true }
+      );
+      setMessages(res.data);
+    } catch (err) {
+      console.error('Message fetch failed');
+    }
   };
 
-  const filteredContacts = sampleContacts.filter(contact =>
-    contact.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const fetchUsers = async () => {
+    try {
+      const res = await axios.get(`${API}/me`, { withCredentials: true });
+      setAllUsers(res.data.users);
+    } catch (err) {
+      console.error('Failed to fetch users');
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !selectedUser || !currentUser) return;
+    try {
+      await axios.post(
+        `${API}/send`,
+        {
+          sender: currentUser.username,
+          receiver: selectedUser.username,
+          message: newMessage,
+        },
+        { withCredentials: true }
+      );
+      setNewMessage('');
+      fetchMessages();
+      fetchUsers();
+    } catch (err) {
+      console.error('Send failed');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await axios.get(`${API}/logout`, { withCredentials: true });
+      setCurrentUser(null);
+    } catch (err) {
+      console.error('Logout failed');
+    }
+  };
+
+  const getDisplayName = (email: string) =>
+    email && email.includes('@') ? email.split('@')[0] : email || '';
+
+  const getAvatar = (user: User) =>
+    user?.photoURL || 'https://res.cloudinary.com/dg9itycrz/image/upload/v1734767663/avatar_i8vrav.png';
+
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+    return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const getStatusIcon = (status?: string) => {
+    switch (status) {
+      case 'read':
+        return <span className="text-blue-400">✓✓</span>;
+      case 'delivered':
+        return '✓✓';
+      case 'sent':
+      default:
+        return '✓';
+    }
+  };
+
+  const filteredUsers = (allUsers || []).filter(user =>
+    getDisplayName(user.username).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleContactSelect = (contact: Contact) => {
-    setSelectedContact(contact);
+  const handleUserSelect = (user: User) => {
+    setSelectedUser(user);
     setShowMobileChat(true);
+    // Update unseen status
+    const updatedUsers = allUsers.map((u) =>
+      u.username === user.username ? { ...u, hasUnseen: false } : u
+    );
+    setAllUsers(updatedUsers);
   };
 
   const handleBackToContacts = () => {
     setShowMobileChat(false);
-    setSelectedContact(null);
+    setSelectedUser(null);
   };
+
+  const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    setIsTyping(true);
+    setTimeout(() => setIsTyping(false), 1000);
+  };
+
+  // Fetch messages when user is selected
+  useEffect(() => {
+    if (selectedUser) {
+      fetchMessages();
+      const interval = setInterval(() => {
+        fetchMessages();
+        fetchUsers();
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedUser]);
+
+  // Fetch users after login
+  useEffect(() => {
+    if (currentUser && (!allUsers || allUsers.length === 0)) {
+      setLoading(true);
+      axios
+        .get(`${API}/users`, { withCredentials: true })
+        .then((res) => setAllUsers(res.data))
+        .catch((err) => {
+          console.error('Failed to fetch users:', err);
+          setAllUsers([]);
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [currentUser]);
+
+  // Auto-scroll to bottom of messages
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
 
   return (
     <div className="flex h-screen bg-chat-background">
@@ -129,11 +183,21 @@ export default function WhatsAppChat() {
         <div className="p-4 bg-whatsapp-green border-b border-chat-sidebar-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src="/placeholder.svg" />
-                <AvatarFallback className="bg-white text-whatsapp-green">Me</AvatarFallback>
+              <Avatar 
+                className="h-10 w-10 cursor-pointer"
+                onClick={() => currentUser && setProfileUser(currentUser)}
+              >
+                <AvatarImage src={currentUser ? getAvatar(currentUser) : "/placeholder.svg"} />
+                <AvatarFallback className="bg-white text-whatsapp-green">
+                  {currentUser ? getDisplayName(currentUser.username).charAt(0).toUpperCase() : 'Me'}
+                </AvatarFallback>
               </Avatar>
-              <span className="font-medium text-white hidden md:block">WhatsApp</span>
+              <div className="hidden md:block">
+                <span className="font-medium text-white block">WhatsApp</span>
+                <span className="text-xs text-white/70">
+                  {currentUser ? getDisplayName(currentUser.username) : ''}
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-1">
               <Button 
@@ -152,7 +216,12 @@ export default function WhatsAppChat() {
               >
                 <Settings className="h-5 w-5" />
               </Button>
-              <Button variant="ghost" size="icon" className="text-white hover:bg-whatsapp-green-dark hidden md:flex">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="text-white hover:bg-whatsapp-green-dark hidden md:flex"
+                onClick={handleLogout}
+              >
                 <MoreVertical className="h-5 w-5" />
               </Button>
             </div>
@@ -174,47 +243,60 @@ export default function WhatsAppChat() {
 
         {/* Contacts List */}
         <div className="flex-1 overflow-y-auto">
-          {filteredContacts.map((contact) => (
-            <div
-              key={contact.id}
-              onClick={() => handleContactSelect(contact)}
-              className={`p-3 cursor-pointer hover:bg-accent transition-colors border-b border-chat-sidebar-border last:border-b-0 ${
-                selectedContact?.id === contact.id ? 'bg-accent' : ''
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={contact.avatar} />
-                    <AvatarFallback>{contact.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                  </Avatar>
-                  {contact.isOnline && (
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-whatsapp-green rounded-full border-2 border-white"></div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-medium text-foreground truncate">{contact.name}</h3>
-                    <span className="text-xs text-muted-foreground">{contact.timestamp}</span>
+          {loading ? (
+            <div className="p-4 text-center text-muted-foreground">Loading users...</div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground">No users found</div>
+          ) : (
+            filteredUsers.map((user) => (
+              <div
+                key={user._id}
+                onClick={() => handleUserSelect(user)}
+                className={`p-3 cursor-pointer hover:bg-accent transition-colors border-b border-chat-sidebar-border last:border-b-0 ${
+                  selectedUser?.username === user.username ? 'bg-accent' : ''
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Avatar 
+                      className="h-12 w-12 cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setProfileUser(user);
+                      }}
+                    >
+                      <AvatarImage src={getAvatar(user)} />
+                      <AvatarFallback>{getDisplayName(user.username).charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-muted-foreground truncate">{contact.lastMessage}</p>
-                    {contact.unreadCount && (
-                      <Badge className="bg-whatsapp-green text-white text-xs">
-                        {contact.unreadCount}
-                      </Badge>
-                    )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start">
+                      <h3 className="font-medium text-foreground truncate">
+                        {getDisplayName(user.username)}
+                      </h3>
+                      <span className="text-xs text-muted-foreground">Online</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-muted-foreground truncate">
+                        {user.username}
+                      </p>
+                      {user.hasUnseen && (
+                        <Badge className="bg-whatsapp-green text-white text-xs">
+                          •
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
       {/* Chat Area */}
-      <div className={`flex-1 flex flex-col ${!showMobileChat && !selectedContact ? 'hidden md:flex' : 'flex'}`}>
-        {!selectedContact ? (
+      <div className={`flex-1 flex flex-col ${!showMobileChat && !selectedUser ? 'hidden md:flex' : 'flex'}`}>
+        {!selectedUser ? (
           <div className="flex-1 flex items-center justify-center bg-chat-background">
             <div className="text-center text-muted-foreground">
               <div className="mb-4">
@@ -240,13 +322,13 @@ export default function WhatsAppChat() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <Avatar className="h-10 w-10">
-              <AvatarImage src={selectedContact.avatar} />
-              <AvatarFallback>{selectedContact.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+              <AvatarImage src={getAvatar(selectedUser)} />
+              <AvatarFallback>{getDisplayName(selectedUser.username).charAt(0).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div>
-              <h2 className="font-medium text-foreground">{selectedContact.name}</h2>
+              <h2 className="font-medium text-foreground">{getDisplayName(selectedUser.username)}</h2>
               <p className="text-sm text-muted-foreground">
-                {selectedContact.isOnline ? 'Online' : 'Last seen recently'}
+                {isTyping ? 'Typing...' : 'Online'}
               </p>
             </div>
           </div>
@@ -265,32 +347,31 @@ export default function WhatsAppChat() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-chat-background">
-          {messages.map((message) => (
+          {messages.map((message, i) => (
             <div
-              key={message.id}
-              className={`flex ${message.sender === 'me' ? 'justify-end' : 'justify-start'}`}
+              key={i}
+              className={`flex ${message.sender === currentUser?.username ? 'justify-end' : 'justify-start'}`}
             >
               <div className={`max-w-[85%] md:max-w-[70%] p-3 rounded-lg shadow-sm ${
-                message.sender === 'me' 
+                message.sender === currentUser?.username 
                   ? 'bg-whatsapp-green text-white rounded-br-none' 
                   : 'bg-card text-foreground rounded-bl-none border'
               }`}>
-                <p className="text-sm leading-relaxed">{message.text}</p>
+                <p className="text-sm leading-relaxed">{message.message}</p>
                 <div className={`flex items-center justify-end gap-1 mt-1 text-xs ${
-                  message.sender === 'me' ? 'text-white/70' : 'text-muted-foreground'
+                  message.sender === currentUser?.username ? 'text-white/70' : 'text-muted-foreground'
                 }`}>
-                  <span>{message.timestamp}</span>
-                  {message.sender === 'me' && (
-                    <span className={`text-xs ml-1 ${
-                      message.status === 'read' ? 'text-blue-400' : ''
-                    }`}>
-                      {message.status === 'read' ? '✓✓' : message.status === 'delivered' ? '✓✓' : '✓'}
+                  <span>{formatTime(message.timestamp)}</span>
+                  {message.sender === currentUser?.username && (
+                    <span className="text-xs ml-1">
+                      {getStatusIcon(message.status)}
                     </span>
                   )}
                 </div>
               </div>
             </div>
           ))}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Message Input */}
@@ -299,7 +380,7 @@ export default function WhatsAppChat() {
             <Input
               placeholder="Type a message"
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={handleTyping}
               onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
               className="flex-1 border-0 bg-background focus-visible:ring-1"
             />
@@ -318,6 +399,9 @@ export default function WhatsAppChat() {
       </div>
       
       <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      {profileUser && (
+        <ProfilePopup user={profileUser} onClose={() => setProfileUser(null)} />
+      )}
     </div>
   );
 }
