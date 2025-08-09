@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import axios from 'axios';
 
+// Ensure React is available globally
+if (typeof React === 'undefined') {
+  throw new Error('React is not available. Please check your React installation.');
+}
+
 interface User {
   _id: string;
   username: string;

@@ -1,3 +1,4 @@
+import React from "react";
 import WhatsAppChat from "@/components/WhatsAppChat";
 import Login from "@/components/Login";
 import { useAuth } from "@/contexts/AuthContext";
